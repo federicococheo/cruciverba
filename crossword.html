@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cruciverba</title>
+<style>
+  :root{
+    --crimson:#e21c5b;
+    --crimson-dark:#c11650;
+    --cell-bg:#ffffff;
+    --cell-gap:5px;
+    --cell-size:38px;
+    --ink:#1a1a1a;
+    --select:#ffd23f;
+    --word-tint:#ffc7d8;
+    --correct-bg:#c8f7c5;
+    --correct-ink:#1c6b18;
+    --wrong-bg:#ffd3d3;
+    --wrong-border:#c0392b;
+    --solved-bg:#c8f7c5;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--crimson);
+    font-family:'Segoe UI',Arial,Helvetica,sans-serif;
+    color:#fff;
+    padding:24px 16px 60px;
+  }
+  .app{max-width:960px;margin:0 auto;}
+  header{text-align:center;margin-bottom:20px;}
+  header h1{
+    margin:0 0 4px;
+    font-size:clamp(28px,5vw,40px);
+    letter-spacing:2px;
+    font-weight:800;
+    text-transform:uppercase;
+  }
+  header p{margin:0;opacity:.85;font-size:14px;}
+
+  .toolbar{
+    display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;
+    margin:18px 0;
+  }
+  button{
+    font-family:inherit;
+    font-weight:700;
+    border:none;
+    border-radius:8px;
+    padding:10px 18px;
+    cursor:pointer;
+    font-size:14px;
+    background:#fff;
+    color:var(--crimson-dark);
+    box-shadow:0 2px 0 rgba(0,0,0,.15);
+  }
+  button:hover{background:#fff0f4;}
+  button:active{transform:translateY(1px);box-shadow:none;}
+
+  #status{
+    text-align:center;
+    min-height:24px;
+    font-weight:700;
+    margin-bottom:10px;
+  }
+  #status.ok{color:#c8f7c5;}
+  #status.err{color:#ffd3d3;}
+
+  .meta{
+    display:flex;
+    gap:18px;
+    justify-content:center;
+    flex-wrap:wrap;
+    font-size:13px;
+    font-weight:700;
+    opacity:.9;
+    margin-bottom:8px;
+  }
+  .meta span{
+    background:rgba(255,255,255,.15);
+    padding:4px 12px;
+    border-radius:20px;
+  }
+
+  .active-clue{
+    display:none;
+    max-width:700px;
+    margin:0 auto 14px;
+    background:#fff;
+    color:var(--ink);
+    padding:10px 16px;
+    border-radius:10px;
+    font-weight:700;
+    font-size:14px;
+    text-align:center;
+    box-shadow:0 2px 6px rgba(0,0,0,.2);
+  }
+  .active-clue.show{display:block;}
+
+  .layout{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:24px;
+  }
+
+  #gridScroll{
+    max-width:100%;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:4px;
+  }
+  #gridWrap{
+    display:inline-grid;
+    gap:var(--cell-gap);
+    padding:10px;
+  }
+  .cell{
+    width:var(--cell-size);height:var(--cell-size);
+    position:relative;
+  }
+  .cell.blocked{background:transparent;}
+  .cell.filled{
+    background:var(--cell-bg);
+    border-radius:6px;
+    box-shadow:0 1px 2px rgba(0,0,0,.25);
+  }
+  .cell.filled.word-hl{background:var(--word-tint);}
+  .cell.filled.active{background:var(--select);}
+  .cell.filled.solved{background:var(--solved-bg);animation:solvedPulse .35s ease;}
+  @keyframes solvedPulse{ from{transform:scale(1.18);} to{transform:scale(1);} }
+  .cell.filled.correct{background:var(--correct-bg);}
+  .cell.filled.incorrect{background:var(--wrong-bg);outline:2px solid var(--wrong-border);outline-offset:-2px;}
+
+  .cell .num{
+    position:absolute;top:1px;left:3px;
+    font-size:calc(var(--cell-size) * 0.24);font-weight:800;color:var(--ink);
+    line-height:1;
+    pointer-events:none;
+  }
+  .cell .err-icon{
+    position:absolute;bottom:0;right:2px;
+    font-size:calc(var(--cell-size) * 0.24);font-weight:900;
+    color:var(--wrong-border);
+    line-height:1;
+    pointer-events:none;
+  }
+  .cell input{
+    width:100%;height:100%;
+    border:none;background:transparent;
+    text-align:center;
+    font-size:calc(var(--cell-size) * 0.48);font-weight:800;
+    color:var(--ink);
+    text-transform:uppercase;
+    padding:0;
+    outline:none;
+    caret-color:transparent;
+  }
+  .cell.correct input,.cell.solved input{color:var(--correct-ink);}
+  .cell input::selection{background:var(--select);color:var(--ink);}
+
+  .clues{
+    display:flex;gap:20px;flex-wrap:wrap;
+    justify-content:center;
+    width:100%;
+    max-width:700px;
+  }
+  .clue-panel{
+    background:#fff;
+    color:var(--ink);
+    border-radius:10px;
+    padding:14px 16px;
+    min-width:160px;
+    flex:1 1 160px;
+    box-shadow:0 2px 6px rgba(0,0,0,.2);
+  }
+  .clue-panel h2{
+    margin:0 0 8px;
+    font-size:15px;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:var(--crimson-dark);
+  }
+  .clue-panel ol{list-style:none;margin:0;padding:0;}
+  .clue-panel li{
+    display:flex;
+    align-items:baseline;
+    gap:4px;
+    font-size:13px;
+    line-height:1.4;
+    padding:5px 4px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .clue-panel li:hover{background:#ffeef2;}
+  .clue-panel li.active{background:var(--select);font-weight:700;}
+  .clue-panel li b{color:var(--crimson-dark);}
+  .clue-panel li .clue-text{flex:1;}
+  .clue-panel li.solved .clue-text{opacity:.55;text-decoration:line-through;}
+  .clue-panel li .check{
+    opacity:0;
+    color:var(--correct-ink);
+    font-weight:800;
+    transform:scale(.6);
+    transition:opacity .15s ease, transform .15s ease;
+  }
+  .clue-panel li.solved .check{opacity:1;transform:scale(1);}
+
+  #fallback{
+    display:none;
+    text-align:center;
+    background:#fff2;
+    border:1px dashed #fff8;
+    border-radius:10px;
+    padding:16px;
+    margin:16px auto;
+    max-width:520px;
+    font-size:14px;
+  }
+  #fallback.show{display:block;}
+  #fileInput{display:none;}
+
+  footer{text-align:center;margin-top:30px;font-size:12px;opacity:.7;}
+
+  #confetti{
+    position:fixed;inset:0;
+    overflow:hidden;
+    pointer-events:none;
+    z-index:60;
+  }
+  .confetti-piece{
+    position:absolute;
+    top:-20px;
+    animation-name:confettiFall;
+    animation-timing-function:ease-in;
+    animation-fill-mode:forwards;
+  }
+  @keyframes confettiFall{
+    to{ transform:translate(var(--drift,0px), 105vh) rotate(var(--spin,360deg)); opacity:.85; }
+  }
+
+  .overlay{
+    position:fixed;inset:0;
+    background:rgba(0,0,0,.55);
+    display:none;
+    align-items:center;justify-content:center;
+    padding:20px;
+    z-index:50;
+  }
+  .overlay.show{display:flex;}
+  .overlay-card{
+    background:#fff;color:var(--ink);
+    border-radius:14px;
+    padding:28px 32px;
+    max-width:360px;width:100%;
+    text-align:center;
+    box-shadow:0 10px 40px rgba(0,0,0,.4);
+    animation:popIn .25s ease;
+  }
+  @keyframes popIn{ from{transform:scale(.85);opacity:0;} to{transform:scale(1);opacity:1;} }
+  .overlay-card h2{margin:0 0 16px;color:var(--crimson-dark);font-size:20px;}
+  .summary-list{list-style:none;margin:0 0 20px;padding:0;text-align:left;}
+  .summary-list li{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:14px;}
+  .summary-list li:last-child{border-bottom:none;}
+  .summary-list b{color:var(--crimson-dark);}
+  .overlay-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+  .overlay-actions button{background:var(--crimson);color:#fff;box-shadow:none;}
+  .overlay-actions button:hover{background:var(--crimson-dark);}
+  .overlay-actions .btn-secondary{
+    background:#fff;
+    color:var(--crimson-dark);
+    border:2px solid var(--crimson);
+  }
+  .overlay-actions .btn-secondary:hover{background:#fff0f4;}
+
+  @media (max-width:480px){
+    body{padding:16px 8px 40px;}
+    header h1{font-size:24px;letter-spacing:1px;}
+    header p{font-size:12px;}
+    button{padding:8px 12px;font-size:12px;}
+    .clue-panel{min-width:0;flex-basis:100%;}
+    .clues{max-width:100%;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Cruciverba</h1>
+  </header>
+
+  <div class="meta">
+    <span id="timerText">Tempo: 00:00</span>
+    <span id="progressText">0 / 0 parole risolte</span>
+    <span id="mistakeText">Errori: 0</span>
+    <span id="hintText">Aiuti: 0</span>
+  </div>
+  <div class="toolbar">
+    <button id="hintLetterBtn">💡 Suggerisci lettera</button>
+    <button id="hintWordBtn">💡 Suggerisci parola</button>
+  </div>
+  <div id="status"></div>
+
+  <div id="fallback">
+    Impossibile caricare <code>source_words.txt</code> automaticamente (il browser blocca il fetch di file locali aperti con <code>file://</code>).<br>
+    Avvia una mini server locale, es. <code>python -m http.server</code> nella cartella del gioco, oppure carica il file a mano:
+    <div style="margin-top:10px;">
+      <button id="pickFileBtn">Carica source_words.txt</button>
+      <input type="file" id="fileInput" accept=".txt">
+    </div>
+  </div>
+
+  <div id="activeClue" class="active-clue" aria-live="polite" role="status"></div>
+
+  <div class="layout">
+    <div id="gridScroll"><div id="gridWrap"></div></div>
+    <div class="clues">
+      <div class="clue-panel">
+        <h2>Orizzontali</h2>
+        <ol id="acrossList"></ol>
+      </div>
+      <div class="clue-panel">
+        <h2>Verticali</h2>
+        <ol id="downList"></ol>
+      </div>
+    </div>
+  </div>
+
+  <footer></footer>
+</div>
+
+<div id="confetti" aria-hidden="true"></div>
+
+<div id="winOverlay" class="overlay">
+  <div class="overlay-card">
+    <h2>🎉 Cruciverba risolto!</h2>
+    <ul class="summary-list">
+      <li><span>Tempo</span><b id="summaryTime">00:00</b></li>
+      <li><span>Errori</span><b id="summaryMistakes">0</b></li>
+      <li><span>Aiuti usati</span><b id="summaryHints">0</b></li>
+      <li><span>Miglior tempo</span><b id="summaryBest">—</b></li>
+    </ul>
+    <div class="overlay-actions">
+      <button id="retryBtn" class="btn-secondary">Riprova</button>
+      <button id="closeOverlayBtn">Ottimo!</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Parsing ----------
+  function normalizeWord(w){ return w.trim().toUpperCase(); }
+
+  function parseSource(text){
+    return text.split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(line => {
+        const tabIdx = line.indexOf('\t');
+        const rest = tabIdx >= 0 ? line.slice(tabIdx + 1) : line.replace(/^\d+\s*/, '');
+        const colonIdx = rest.indexOf(':');
+        const word = colonIdx >= 0 ? rest.slice(0, colonIdx) : rest;
+        const clue = colonIdx >= 0 ? rest.slice(colonIdx + 1).trim() : '';
+        return { text: normalizeWord(word), clue };
+      })
+      .filter(w => w.text.length > 0)
+      .filter((w, i, arr) => arr.findIndex(x => x.text === w.text) === i); // dedupe
+  }
+
+  // ---------- Layout generation ----------
+  function key(r,c){ return r + ',' + c; }
+
+  function generateLayout(words){
+    const list = [...words].sort((a,b) => b.text.length - a.text.length);
+    const grid = new Map();
+    const placed = [];
+
+    function canPlace(word,row,col,dir){
+      const len = word.length;
+      const beforeKey = dir === 'A' ? key(row,col-1) : key(row-1,col);
+      const afterKey  = dir === 'A' ? key(row,col+len) : key(row+len,col);
+      if (grid.has(beforeKey) || grid.has(afterKey)) return null;
+      let intersections = 0;
+      for (let i=0;i<len;i++){
+        const r = dir === 'A' ? row : row+i;
+        const c = dir === 'A' ? col+i : col;
+        const existing = grid.get(key(r,c));
+        if (existing){
+          if (existing !== word[i]) return null;
+          intersections++;
+        } else {
+          const n1 = dir === 'A' ? key(r-1,c) : key(r,c-1);
+          const n2 = dir === 'A' ? key(r+1,c) : key(r,c+1);
+          if (grid.has(n1) || grid.has(n2)) return null;
+        }
+      }
+      return intersections;
+    }
+
+    function place(word,row,col,dir){
+      for (let i=0;i<word.length;i++){
+        const r = dir === 'A' ? row : row+i;
+        const c = dir === 'A' ? col+i : col;
+        grid.set(key(r,c), word[i]);
+      }
+    }
+
+    const first = list[0];
+    place(first.text,0,0,'A');
+    placed.push({...first,row:0,col:0,dir:'A'});
+
+    for (let idx=1; idx<list.length; idx++){
+      const word = list[idx];
+      let best = null;
+      for (let i=0;i<word.text.length;i++){
+        const letter = word.text[i];
+        for (const [k,gLetter] of grid.entries()){
+          if (gLetter !== letter) continue;
+          const [gr,gc] = k.split(',').map(Number);
+          const candidates = [
+            {row:gr, col:gc-i, dir:'A'},
+            {row:gr-i, col:gc, dir:'D'},
+          ];
+          for (const cand of candidates){
+            const score = canPlace(word.text,cand.row,cand.col,cand.dir);
+            if (score !== null && score > 0){
+              if (!best || score > best.score) best = {...cand,score};
+            }
+          }
+        }
+      }
+      if (best){
+        place(word.text,best.row,best.col,best.dir);
+        placed.push({...word,row:best.row,col:best.col,dir:best.dir});
+      } else {
+        let maxR = -Infinity;
+        for (const k of grid.keys()){
+          const r = Number(k.split(',')[0]);
+          if (r > maxR) maxR = r;
+        }
+        const row = (maxR === -Infinity ? 0 : maxR + 2);
+        place(word.text,row,0,'A');
+        placed.push({...word,row,col:0,dir:'A'});
+      }
+    }
+    return { placed, grid };
+  }
+
+  // ---------- Numbering + normalization ----------
+  function buildPuzzle(words){
+    const { placed, grid } = generateLayout(words);
+
+    let minR=Infinity,minC=Infinity,maxR=-Infinity,maxC=-Infinity;
+    for (const k of grid.keys()){
+      const [r,c] = k.split(',').map(Number);
+      minR=Math.min(minR,r); maxR=Math.max(maxR,r);
+      minC=Math.min(minC,c); maxC=Math.max(maxC,c);
+    }
+    const height = maxR-minR+1, width = maxC-minC+1;
+
+    const norm = new Map();
+    for (const [k,v] of grid.entries()){
+      const [r,c] = k.split(',').map(Number);
+      norm.set(key(r-minR,c-minC), v);
+    }
+    for (const w of placed){ w.row -= minR; w.col -= minC; }
+
+    const numbers = new Map();
+    let n = 1;
+    for (let r=0;r<height;r++){
+      for (let c=0;c<width;c++){
+        if (!norm.has(key(r,c))) continue;
+        const hasLeft = norm.has(key(r,c-1));
+        const hasRight = norm.has(key(r,c+1));
+        const hasUp = norm.has(key(r-1,c));
+        const hasDown = norm.has(key(r+1,c));
+        const acrossStart = !hasLeft && hasRight;
+        const downStart = !hasUp && hasDown;
+        if (acrossStart || downStart){
+          numbers.set(key(r,c), n);
+          n++;
+        }
+      }
+    }
+    for (const w of placed){
+      w.number = numbers.get(key(w.row,w.col));
+    }
+
+    return { placed, grid: norm, width, height, numbers };
+  }
+
+  // ---------- Rendering ----------
+  let puzzle = null;
+  let selected = null; // {row,col}
+  let direction = 'A';
+  let inputs = new Map(); // key -> input element
+  let mistakeCount = 0;
+  let solvedWords = new Set(); // keys "number-dir"
+  let hintsUsed = 0;
+  let puzzleCompleted = false;
+  let timerSeconds = 0;
+  let timerInterval = null;
+  let isRestoring = false;
+
+  function wordKey(w){ return w.number + '-' + w.dir; }
+
+  function puzzleSignature(){
+    return puzzle.placed.map(w => w.text).slice().sort().join('-');
+  }
+
+  function progressKey(sig){ return 'cruciverba_progress_' + sig; }
+
+  function saveProgress(){
+    if (!puzzle || isRestoring) return;
+    try {
+      const letters = {};
+      for (const [k, input] of inputs.entries()){
+        if (input.value) letters[k] = input.value;
+      }
+      const data = { letters, mistakeCount, hintsUsed, timerSeconds };
+      localStorage.setItem(progressKey(puzzleSignature()), JSON.stringify(data));
+    } catch (err){
+      // localStorage unavailable — skip persistence
+    }
+  }
+
+  function clearSavedProgress(){
+    try { localStorage.removeItem(progressKey(puzzleSignature())); } catch (err){ /* ignore */ }
+  }
+
+  // Returns true if saved progress was found and applied. Only fills in-memory
+  // state and cell values here — the caller is responsible for refreshing the
+  // on-screen counters once, after deciding whether this was a restore or not.
+  function restoreProgress(){
+    try {
+      const raw = localStorage.getItem(progressKey(puzzleSignature()));
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (data.letters){
+        for (const [k, val] of Object.entries(data.letters)){
+          const input = inputs.get(k);
+          if (input) input.value = val;
+        }
+      }
+      mistakeCount = data.mistakeCount || 0;
+      hintsUsed = data.hintsUsed || 0;
+      timerSeconds = data.timerSeconds || 0;
+      for (const [k, input] of inputs.entries()){
+        if (input.value && input.value !== input.dataset.expected){
+          markIncorrect(input.closest('.cell'));
+        }
+      }
+      for (const w of puzzle.placed) updateWordSolvedState(w);
+      return true;
+    } catch (err){
+      // corrupt or unavailable data — ignore and start fresh
+      return false;
+    }
+  }
+
+  function formatTime(total){
+    const m = Math.floor(total / 60).toString().padStart(2,'0');
+    const s = (total % 60).toString().padStart(2,'0');
+    return `${m}:${s}`;
+  }
+
+  function updateTimerDisplay(){
+    document.getElementById('timerText').textContent = `Tempo: ${formatTime(timerSeconds)}`;
+  }
+
+  function ensureTimerRunning(){
+    if (timerInterval || puzzleCompleted) return;
+    timerInterval = setInterval(() => {
+      timerSeconds++;
+      updateTimerDisplay();
+      saveProgress();
+    }, 1000);
+  }
+
+  function stopTimer(){
+    if (timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+  }
+
+  function updateHints(){
+    document.getElementById('hintText').textContent = `Aiuti: ${hintsUsed}`;
+  }
+
+  function wordsAt(row,col){
+    const res = {A:null, D:null};
+    for (const w of puzzle.placed){
+      for (let i=0;i<w.text.length;i++){
+        const r = w.dir === 'A' ? w.row : w.row+i;
+        const c = w.dir === 'A' ? w.col+i : w.col;
+        if (r===row && c===col){ res[w.dir] = w; }
+      }
+    }
+    return res;
+  }
+
+  function cellsOfWord(w){
+    const cells = [];
+    for (let i=0;i<w.text.length;i++){
+      const r = w.dir === 'A' ? w.row : w.row+i;
+      const c = w.dir === 'A' ? w.col+i : w.col;
+      cells.push({r,c});
+    }
+    return cells;
+  }
+
+  function isWordComplete(w){
+    for (const {r,c} of cellsOfWord(w)){
+      const input = inputs.get(key(r,c));
+      if (!input || input.value.toUpperCase() !== input.dataset.expected) return false;
+    }
+    return true;
+  }
+
+  function updateWordSolvedState(w){
+    if (!w) return;
+    const solved = isWordComplete(w);
+    const wKey = wordKey(w);
+    const cells = cellsOfWord(w)
+      .map(({r,c}) => inputs.get(key(r,c)))
+      .filter(Boolean)
+      .map(input => input.closest('.cell'));
+    if (solved){
+      solvedWords.add(wKey);
+      cells.forEach(c => c.classList.add('solved'));
+    } else {
+      solvedWords.delete(wKey);
+      cells.forEach(c => c.classList.remove('solved'));
+    }
+    const li = document.querySelector(`.clue-panel li[data-num="${w.number}"][data-dir="${w.dir}"]`);
+    if (li) li.classList.toggle('solved', solved);
+  }
+
+  function updateProgress(){
+    const total = puzzle.placed.length;
+    const solved = solvedWords.size;
+    document.getElementById('progressText').textContent = `${solved} / ${total} parole risolte`;
+    const status = document.getElementById('status');
+    if (total > 0 && solved === total){
+      status.classList.remove('err');
+      status.classList.add('ok');
+      status.textContent = '🎉 Complimenti! Cruciverba risolto correttamente.';
+      if (!puzzleCompleted){
+        puzzleCompleted = true;
+        stopTimer();
+        showWinOverlay();
+      }
+    } else {
+      if (status.classList.contains('ok')){
+        // puzzle was complete but a cell changed since — clear the stale win message
+        status.textContent = '';
+        status.classList.remove('ok');
+      }
+      if (puzzleCompleted){
+        puzzleCompleted = false;
+        document.getElementById('winOverlay').classList.remove('show');
+      }
+    }
+    saveProgress();
+  }
+
+  function showWinOverlay(){
+    document.getElementById('summaryTime').textContent = formatTime(timerSeconds);
+    document.getElementById('summaryMistakes').textContent = mistakeCount;
+    document.getElementById('summaryHints').textContent = hintsUsed;
+
+    let bestText = '—';
+    try {
+      const storeKey = 'cruciverba_best_' + puzzleSignature();
+      const prevRaw = localStorage.getItem(storeKey);
+      const prev = prevRaw !== null ? parseInt(prevRaw, 10) : null;
+      if (prev === null || timerSeconds < prev){
+        localStorage.setItem(storeKey, String(timerSeconds));
+        bestText = formatTime(timerSeconds) + (prev !== null ? ' (nuovo record!)' : '');
+      } else {
+        bestText = formatTime(prev);
+      }
+    } catch (err){
+      // localStorage unavailable (e.g. private browsing) — skip best-time tracking
+    }
+    document.getElementById('summaryBest').textContent = bestText;
+    document.getElementById('winOverlay').classList.add('show');
+
+    if (!isRestoring && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+      launchConfetti();
+    }
+  }
+
+  function launchConfetti(){
+    const container = document.getElementById('confetti');
+    const colors = ['#e21c5b','#ffd23f','#c8f7c5','#ffffff','#6c63ff'];
+    const count = 90;
+    for (let i = 0; i < count; i++){
+      const piece = document.createElement('div');
+      piece.className = 'confetti-piece';
+      const isCircle = Math.random() < 0.3;
+      const w = 6 + Math.random() * 6;
+      const h = isCircle ? w : w + 4 + Math.random() * 6;
+      piece.style.left = (Math.random() * 100) + '%';
+      piece.style.width = w + 'px';
+      piece.style.height = h + 'px';
+      piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+      if (isCircle) piece.style.borderRadius = '50%';
+      piece.style.setProperty('--drift', (Math.random() * 200 - 100) + 'px');
+      piece.style.setProperty('--spin', (360 + Math.random() * 360) + 'deg');
+      const duration = 2.2 + Math.random() * 1.8;
+      const delay = Math.random() * 0.3;
+      piece.style.animationDuration = duration + 's';
+      piece.style.animationDelay = delay + 's';
+      container.appendChild(piece);
+      setTimeout(() => piece.remove(), (duration + delay + 0.3) * 1000);
+    }
+  }
+
+  function revealLetter(){
+    if (!selected || !puzzle) return;
+    const input = inputs.get(key(selected.row, selected.col));
+    if (!input) return;
+    ensureTimerRunning();
+    if (input.value.toUpperCase() !== input.dataset.expected){
+      input.value = input.dataset.expected;
+      hintsUsed++;
+      updateHints();
+    }
+    clearIncorrect(input.closest('.cell'));
+    const at = wordsAt(selected.row, selected.col);
+    updateWordSolvedState(at.A);
+    updateWordSolvedState(at.D);
+    updateProgress();
+  }
+
+  function revealWord(){
+    if (!selected || !puzzle) return;
+    const at = wordsAt(selected.row, selected.col);
+    const word = at[direction] || at.A || at.D;
+    if (!word) return;
+    ensureTimerRunning();
+    let revealedCount = 0;
+    for (const {r,c} of cellsOfWord(word)){
+      const input = inputs.get(key(r,c));
+      if (!input) continue;
+      if (input.value.toUpperCase() !== input.dataset.expected){
+        input.value = input.dataset.expected;
+        revealedCount++;
+      }
+      clearIncorrect(input.closest('.cell'));
+    }
+    if (revealedCount > 0){
+      hintsUsed += revealedCount;
+      updateHints();
+    }
+    updateWordSolvedState(word);
+    updateProgress();
+  }
+
+  function updateMistakes(){
+    document.getElementById('mistakeText').textContent = `Errori: ${mistakeCount}`;
+  }
+
+  function markIncorrect(cell){
+    if (!cell) return;
+    cell.classList.add('incorrect');
+    if (!cell.querySelector('.err-icon')){
+      const icon = document.createElement('span');
+      icon.className = 'err-icon';
+      icon.textContent = '✕';
+      icon.setAttribute('aria-hidden','true');
+      cell.appendChild(icon);
+    }
+  }
+
+  function clearIncorrect(cell){
+    if (!cell) return;
+    cell.classList.remove('incorrect');
+    const icon = cell.querySelector('.err-icon');
+    if (icon) icon.remove();
+  }
+
+  function clearHighlights(){
+    document.querySelectorAll('.cell.filled').forEach(el=>{
+      el.classList.remove('word-hl','active');
+    });
+    document.querySelectorAll('.clue-panel li').forEach(el=>el.classList.remove('active'));
+  }
+
+  function updateActiveClueBanner(word){
+    const el = document.getElementById('activeClue');
+    if (!el) return;
+    if (!word){
+      el.textContent = '';
+      el.classList.remove('show');
+      return;
+    }
+    const label = word.dir === 'A' ? 'Orizzontali' : 'Verticali';
+    el.textContent = `${word.number} ${label}: ${word.clue || word.text}`;
+    el.classList.add('show');
+  }
+
+  function highlightSelection(){
+    clearHighlights();
+    if (!selected){ updateActiveClueBanner(null); return; }
+    const at = wordsAt(selected.row, selected.col);
+    let word = at[direction] || at.A || at.D;
+    if (!word){ updateActiveClueBanner(null); return; }
+    if (!at[direction]) direction = word.dir;
+    for (const {r,c} of cellsOfWord(word)){
+      const el = inputs.get(key(r,c));
+      if (el) el.closest('.cell').classList.add('word-hl');
+    }
+    const selEl = inputs.get(key(selected.row,selected.col));
+    if (selEl) selEl.closest('.cell').classList.add('active');
+    const li = document.querySelector(`.clue-panel li[data-num="${word.number}"][data-dir="${word.dir}"]`);
+    if (li) li.classList.add('active');
+    updateActiveClueBanner(word);
+  }
+
+  function selectCell(row,col,forceDir){
+    const at = wordsAt(row,col);
+    if (!at.A && !at.D) return;
+    if (forceDir && at[forceDir]) {
+      direction = forceDir;
+    } else if (selected && selected.row===row && selected.col===col) {
+      // toggle direction if both available
+      if (at.A && at.D) direction = (direction === 'A') ? 'D' : 'A';
+    } else if (!at[direction]) {
+      direction = at.A ? 'A' : 'D';
+    }
+    selected = {row,col};
+    const el = inputs.get(key(row,col));
+    if (el) { el.focus(); el.select(); }
+    highlightSelection();
+  }
+
+  function moveTo(row,col){
+    if (!puzzle.grid.has(key(row,col))) return false;
+    selected = {row,col};
+    const el = inputs.get(key(row,col));
+    if (el) { el.focus(); el.select(); }
+    highlightSelection();
+    return true;
+  }
+
+  function stepInDirection(row,col,dir,delta){
+    return dir === 'A' ? {row, col: col+delta} : {row: row+delta, col};
+  }
+
+  function computeCellSize(gridWidth){
+    const scrollEl = document.getElementById('gridScroll');
+    const available = Math.max(200, (scrollEl ? scrollEl.parentElement.clientWidth : window.innerWidth) - 20);
+    let size = Math.floor(available / gridWidth);
+    size = Math.max(20, Math.min(38, size));
+    return size;
+  }
+
+  function applyCellSize(){
+    if (!puzzle) return;
+    const size = computeCellSize(puzzle.width);
+    document.documentElement.style.setProperty('--cell-size', size + 'px');
+  }
+
+  window.addEventListener('resize', applyCellSize);
+
+  function render(){
+    const gridWrap = document.getElementById('gridWrap');
+    gridWrap.innerHTML = '';
+    inputs = new Map();
+    applyCellSize();
+    gridWrap.style.gridTemplateColumns = `repeat(${puzzle.width}, var(--cell-size))`;
+    gridWrap.style.gridTemplateRows = `repeat(${puzzle.height}, var(--cell-size))`;
+
+    for (let r=0;r<puzzle.height;r++){
+      for (let c=0;c<puzzle.width;c++){
+        const cellDiv = document.createElement('div');
+        const letter = puzzle.grid.get(key(r,c));
+        if (letter === undefined){
+          cellDiv.className = 'cell blocked';
+        } else {
+          cellDiv.className = 'cell filled';
+          const num = puzzle.numbers.get(key(r,c));
+          if (num){
+            const span = document.createElement('span');
+            span.className = 'num';
+            span.textContent = num;
+            cellDiv.appendChild(span);
+          }
+          const input = document.createElement('input');
+          input.maxLength = 1;
+          input.autocomplete = 'off';
+          input.setAttribute('autocapitalize','characters');
+          input.setAttribute('autocorrect','off');
+          input.spellcheck = false;
+          input.setAttribute('inputmode','text');
+          input.dataset.row = r;
+          input.dataset.col = c;
+          input.dataset.expected = letter;
+          input.addEventListener('click', ()=> selectCell(r,c));
+          input.addEventListener('input', onInput);
+          input.addEventListener('keydown', onKeyDown);
+          cellDiv.appendChild(input);
+          inputs.set(key(r,c), input);
+        }
+        gridWrap.appendChild(cellDiv);
+      }
+    }
+
+    renderClueList('acrossList','A');
+    renderClueList('downList','D');
+  }
+
+  function renderClueList(elId, dir){
+    const ol = document.getElementById(elId);
+    ol.innerHTML = '';
+    const words = puzzle.placed.filter(w=>w.dir===dir).sort((a,b)=>a.number-b.number);
+    for (const w of words){
+      const li = document.createElement('li');
+      li.dataset.num = w.number;
+      li.dataset.dir = w.dir;
+      li.innerHTML = `<b>${w.number}.</b><span class="clue-text">${w.clue || w.text}</span><span class="check">✓</span>`;
+      li.addEventListener('click', ()=> selectCell(w.row,w.col,w.dir));
+      ol.appendChild(li);
+    }
+  }
+
+  function onInput(e){
+    const input = e.target;
+    let val = input.value.toUpperCase().replace(/[^A-ZÀÈÉÌÒÙ]/gi,'');
+    val = val.slice(-1);
+    input.value = val;
+    const cell = input.closest('.cell');
+    cell.classList.remove('correct');
+    clearIncorrect(cell);
+
+    const row = Number(input.dataset.row), col = Number(input.dataset.col);
+
+    if (val && val !== input.dataset.expected){
+      markIncorrect(cell);
+      mistakeCount++;
+      updateMistakes();
+    }
+
+    const at = wordsAt(row,col);
+    updateWordSolvedState(at.A);
+    updateWordSolvedState(at.D);
+    updateProgress();
+
+    if (val){
+      ensureTimerRunning();
+      const next = stepInDirection(row,col,direction,1);
+      if (!moveTo(next.row,next.col)) selectCell(row,col);
+    }
+  }
+
+  function clearCell(row,col){
+    const input = inputs.get(key(row,col));
+    if (!input || !input.value) return;
+    input.value = '';
+    const cell = input.closest('.cell');
+    cell.classList.remove('correct');
+    clearIncorrect(cell);
+    const at = wordsAt(row,col);
+    updateWordSolvedState(at.A);
+    updateWordSolvedState(at.D);
+    updateProgress();
+  }
+
+  function navigateWord(delta){
+    if (!selected) return;
+    const combined = puzzle.placed.slice().sort((a,b) =>
+      (a.number - b.number) || ((a.dir === 'A' ? 0 : 1) - (b.dir === 'A' ? 0 : 1))
+    );
+    const at = wordsAt(selected.row, selected.col);
+    const current = at[direction] || at.A || at.D;
+    let idx = combined.findIndex(w => w === current);
+    if (idx === -1) idx = 0;
+    idx = (idx + delta + combined.length) % combined.length;
+    const target = combined[idx];
+    selectCell(target.row, target.col, target.dir);
+  }
+
+  function onKeyDown(e){
+    const row = Number(e.target.dataset.row), col = Number(e.target.dataset.col);
+    if (e.key === 'ArrowRight'){ e.preventDefault(); direction='A'; moveTo(row,col+1); }
+    else if (e.key === 'ArrowLeft'){ e.preventDefault(); direction='A'; moveTo(row,col-1); }
+    else if (e.key === 'ArrowDown'){ e.preventDefault(); direction='D'; moveTo(row+1,col); }
+    else if (e.key === 'ArrowUp'){ e.preventDefault(); direction='D'; moveTo(row-1,col); }
+    else if (e.key === 'Tab'){
+      e.preventDefault();
+      navigateWord(e.shiftKey ? -1 : 1);
+    }
+    else if (e.key === ' ' || e.key === 'Spacebar'){
+      e.preventDefault();
+      const at = wordsAt(row,col);
+      if (at.A && at.D){
+        direction = (direction === 'A') ? 'D' : 'A';
+        highlightSelection();
+      }
+    }
+    else if (e.key === 'Backspace' && !e.target.value){
+      e.preventDefault();
+      const prev = stepInDirection(row,col,direction,-1);
+      if (moveTo(prev.row,prev.col)) clearCell(prev.row,prev.col);
+    }
+  }
+
+  function startGame(words, options = {}){
+    if (words.length < 2){
+      document.getElementById('status').textContent = 'Servono almeno 2 parole per generare un cruciverba.';
+      return;
+    }
+    puzzle = buildPuzzle(words);
+    selected = null;
+    direction = 'A';
+    mistakeCount = 0;
+    solvedWords = new Set();
+    hintsUsed = 0;
+    puzzleCompleted = false;
+    stopTimer();
+    timerSeconds = 0;
+    render();
+    document.getElementById('status').textContent = '';
+    document.getElementById('status').className = '';
+    document.getElementById('winOverlay').classList.remove('show');
+
+    let restored = false;
+    if (options.resetProgress){
+      clearSavedProgress();
+    } else {
+      restored = restoreProgress();
+    }
+
+    // While reflecting restored state, suppress the win-overlay's confetti/
+    // re-save so reopening an already-solved puzzle doesn't feel like a fresh win.
+    isRestoring = restored;
+    updateMistakes();
+    updateHints();
+    updateTimerDisplay();
+    updateProgress();
+    isRestoring = false;
+
+    // auto-select first cell
+    if (puzzle.placed.length){
+      const w0 = puzzle.placed[0];
+      selectCell(w0.row, w0.col, w0.dir);
+    }
+  }
+
+  let lastWords = null;
+
+  function init(words){
+    lastWords = words;
+    startGame(words);
+  }
+
+  // ---------- Loading ----------
+  function showFallback(){
+    document.getElementById('fallback').classList.add('show');
+  }
+
+  function loadFromServer(){
+    return fetch('source_words.txt')
+      .then(res => { if (!res.ok) throw new Error('not ok'); return res.text(); })
+      .then(text => { init(parseSource(text)); document.getElementById('fallback').classList.remove('show'); })
+      .catch(showFallback);
+  }
+
+  loadFromServer();
+
+  document.getElementById('pickFileBtn').addEventListener('click', ()=>{
+    document.getElementById('fileInput').click();
+  });
+  document.getElementById('fileInput').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      init(parseSource(reader.result));
+      document.getElementById('fallback').classList.remove('show');
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById('hintLetterBtn').addEventListener('click', revealLetter);
+  document.getElementById('hintWordBtn').addEventListener('click', revealWord);
+  document.getElementById('closeOverlayBtn').addEventListener('click', () => {
+    document.getElementById('winOverlay').classList.remove('show');
+  });
+  document.getElementById('retryBtn').addEventListener('click', () => {
+    if (lastWords) startGame(lastWords, { resetProgress: true });
+  });
+  document.getElementById('winOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'winOverlay') e.currentTarget.classList.remove('show');
+  });
+
+})();
+</script>
+</body>
+</html>
